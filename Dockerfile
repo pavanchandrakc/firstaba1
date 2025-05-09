@@ -1,11 +1,11 @@
 # Use a lightweight OpenJDK image
-FROM openjdk:17-jdk-slim
-
-# Set the working directory
+FROM maven:3.8.4-openjdk-11 as build
 WORKDIR /app
+COPY . .
+RUN mvn clean package
 
-# Copy the fat JAR into the image (adjust the JAR name if needed)
-COPY target/myproject-1.0-SNAPSHOT-jar-with-dependencies.jar app.jar
-
-# Command to run the JAR
+FROM openjdk:11-jre-slim
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
