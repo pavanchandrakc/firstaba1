@@ -1,8 +1,14 @@
 pipeline {
     agent any
 
+    tools {
+        jdk 'jdk-17'               // Set this name in Jenkins > Global Tool Configuration
+        dockerTool 'docker'
+    }
+
     environment {
-        IMAGE_NAME = "pavanchandrakc/pavan"
+        DOCKER_IMAGE = 'pavanchandrakc/pavan'
+        DOCKER_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
@@ -10,42 +16,119 @@ pipeline {
             steps {
                 checkout scm
             }
+            post {
+                always {
+                    emailext (
+                        subject: "Stage Checkout Status: ${currentBuild.fullDisplayName}",
+                        body: """<p>Stage 'Checkout' finished with status: ${currentBuild.result}</p>
+                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
+                        mimeType: 'text/html',
+                        to: 'pavanchandra2599@gmail.com'
+                    )
+                }
+            }
         }
 
-        stage('Build with Maven') {
+        stage('Build') {
             steps {
-                sh 'mvn clean package'
+                bat '''
+                    echo "JAVA_HOME: %JAVA_HOME%"
+                    echo "Maven version:"
+                    mvn --version
+                    echo "Building project..."
+                    mvn clean package
+                '''
+            }
+            post {
+                always {
+                    emailext (
+                        subject: "Stage Build Status: ${currentBuild.fullDisplayName}",
+                        body: """<p>Stage 'Build' finished with status: ${currentBuild.result}</p>
+                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
+                        mimeType: 'text/html',
+                        to: 'pavanchandra2599@gmail.com'
+                    )
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                bat '''
+                    echo "Running tests..."
+                    mvn test
+                '''
+            }
+            post {
+                always {
+                    emailext (
+                        subject: "Stage Test Status: ${currentBuild.fullDisplayName}",
+                        body: """<p>Stage 'Test' finished with status: ${currentBuild.result}</p>
+                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
+                        mimeType: 'text/html',
+                        to: 'pavanchandra2599@gmail.com'
+                    )
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    docker.build("${IMAGE_NAME}")
+                bat """
+                    set PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%
+                    docker build -t ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} .
+                    docker tag ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} ${env.DOCKER_IMAGE}:latest
+                """
+            }
+            post {
+                always {
+                    emailext (
+                        subject: "Stage Build Docker Image Status: ${currentBuild.fullDisplayName}",
+                        body: """<p>Stage 'Build Docker Image' finished with status: ${currentBuild.result}</p>
+                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
+                        mimeType: 'text/html',
+                        to: 'pavanchandra2599@gmail.com'
+                    )
                 }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                    sh "docker push ${IMAGE_NAME}"
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    bat """
+                        set PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%
+                        echo Logging into Docker Hub...
+                        echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USERNAME% --password-stdin
+                        docker push ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}
+                        docker push ${env.DOCKER_IMAGE}:latest
+                        docker logout
+                    """
+                }
+            }
+            post {
+                always {
+                    emailext (
+                        subject: "Stage Push to Docker Hub Status: ${currentBuild.fullDisplayName}",
+                        body: """<p>Stage 'Push to Docker Hub' finished with status: ${currentBuild.result}</p>
+                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
+                        mimeType: 'text/html',
+                        to: 'pavanchandra2599@gmail.com'
+                    )
                 }
             }
         }
     }
 
     post {
-        success {
-            mail to: 'pavanchandra2599@gmail.com',
-                 subject: "✅ Build Success: ${env.JOB_NAME}",
-                 body: "The build and deployment completed successfully."
-        }
-        failure {
-            mail to: 'pavanchandra2599@gmail.com',
-                 subject: "❌ Build Failed: ${env.JOB_NAME}",
-                 body: "There was an error in the pipeline. Check Jenkins logs."
+        always {
+            emailext (
+                subject: "Pipeline Status: ${currentBuild.fullDisplayName}",
+                body: """<p>Pipeline Status: ${currentBuild.result}</p>
+                         <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
+                mimeType: 'text/html',
+                to: 'pavanchandra2599@gmail.com'
+            )
         }
     }
 }
