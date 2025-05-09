@@ -1,23 +1,32 @@
 # Use Maven with OpenJDK 17 for building
-FROM maven:3.9.9-openjdk-17-slim AS build
+FROM maven:3.9.6-openjdk-17 AS build
 
 # Set working directory
 WORKDIR /app
 
-# Copy all source code into the container
+# Copy pom.xml and other necessary files to the container
+COPY pom.xml .
+
+# Run Maven to fetch dependencies
+RUN mvn dependency:go-offline
+
+# Copy the rest of the project files
 COPY . .
 
-# Build the application
-RUN mvn clean package
+# Run Maven build
+RUN mvn clean install
 
-# Use a lightweight Java runtime for running the app
+# Use a minimal image to run the application
 FROM openjdk:17-jdk-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy the built jar file from the build stage
-COPY --from=build /app/target/*.jar app.jar
+# Copy the jar file from the build image
+COPY --from=build /app/target/devopsaba-0.0.1-SNAPSHOT.jar /app/devopsaba.jar
+
+# Expose the application port (if needed)
+EXPOSE 8080
 
 # Run the application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/devopsaba.jar"]
