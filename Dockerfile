@@ -1,11 +1,14 @@
 # Use a lightweight OpenJDK image
-FROM maven:3.8.4-openjdk-11 as build
+# Use JDK 17 for building
+FROM openjdk:17-jdk-slim as build
+
 WORKDIR /app
 COPY . .
 RUN mvn clean package
 
-FROM openjdk:11-jre-slim
+# Use JRE 17 to run (optional, or reuse same image)
+FROM openjdk:17-jdk-slim
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+COPY --from=build /app/target/myproject-1.0-SNAPSHOT-jar-with-dependencies.jar app.jar
+CMD ["java", "-jar", "app.jar"]
+
