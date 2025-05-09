@@ -17,7 +17,7 @@ pipeline {
         stage('Build & Test with Maven') {
             steps {
                 script {
-                    echo "JAVA_HOME: ${JAVA_HOME}"
+                  //  echo "JAVA_HOME: ${JAVA_HOME}"
                     echo "Maven version:"
                     bat 'mvn --version'
                     bat 'mvn clean test'
