@@ -1,14 +1,10 @@
 pipeline {
     agent any
 
-    tools {
-        jdk 'JDK 17'               // Set this name in Jenkins > Global Tool Configuration
-        dockerTool 'docker'
-    }
-
     environment {
-        DOCKER_IMAGE = 'pavanchandrakc/pavan'
-        DOCKER_TAG = "${BUILD_NUMBER}"
+        DOCKER_IMAGE = "pavanchandrakc/pavan"
+        IMAGE_TAG = "9"
+        LATEST_TAG = "latest"
     }
 
     stages {
@@ -16,119 +12,51 @@ pipeline {
             steps {
                 checkout scm
             }
-            post {
-                always {
-                    emailext (
-                        subject: "Stage Checkout Status: ${currentBuild.fullDisplayName}",
-                        body: """<p>Stage 'Checkout' finished with status: ${currentBuild.result}</p>
-                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
-                        mimeType: 'text/html',
-                        to: 'pavanchandra2599@gmail.com'
-                    )
-                }
-            }
         }
 
-        stage('Build') {
+        stage('Build & Test with Maven') {
             steps {
-                bat '''
-                    echo "JAVA_HOME: %JAVA_HOME%"
+                script {
+                    echo "JAVA_HOME: ${JAVA_HOME}"
                     echo "Maven version:"
-                    mvn --version
-                    echo "Building project..."
-                    mvn clean package
-                '''
-            }
-            post {
-                always {
-                    emailext (
-                        subject: "Stage Build Status: ${currentBuild.fullDisplayName}",
-                        body: """<p>Stage 'Build' finished with status: ${currentBuild.result}</p>
-                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
-                        mimeType: 'text/html',
-                        to: 'pavanchandra2599@gmail.com'
-                    )
-                }
-            }
-        }
-
-        stage('Test') {
-            steps {
-                bat '''
-                    echo "Running tests..."
-                    mvn test
-                '''
-            }
-            post {
-                always {
-                    emailext (
-                        subject: "Stage Test Status: ${currentBuild.fullDisplayName}",
-                        body: """<p>Stage 'Test' finished with status: ${currentBuild.result}</p>
-                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
-                        mimeType: 'text/html',
-                        to: 'pavanchandra2599@gmail.com'
-                    )
+                    bat 'mvn --version'
+                    bat 'mvn clean test'
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                bat """
-                    set PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%
-                    docker build -t ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} .
-                    docker tag ${env.DOCKER_IMAGE}:${env.DOCKER_TAG} ${env.DOCKER_IMAGE}:latest
-                """
-            }
-            post {
-                always {
-                    emailext (
-                        subject: "Stage Build Docker Image Status: ${currentBuild.fullDisplayName}",
-                        body: """<p>Stage 'Build Docker Image' finished with status: ${currentBuild.result}</p>
-                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
-                        mimeType: 'text/html',
-                        to: 'pavanchandra2599@gmail.com'
-                    )
+                script {
+                    bat "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
+                    bat "docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${DOCKER_IMAGE}:${LATEST_TAG}"
                 }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                    bat """
-                        set PATH=C:\\Program Files\\Docker\\Docker\\resources\\bin;%PATH%
-                        echo Logging into Docker Hub...
-                        echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USERNAME% --password-stdin
-                        docker push ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}
-                        docker push ${env.DOCKER_IMAGE}:latest
-                        docker logout
-                    """
-                }
-            }
-            post {
-                always {
-                    emailext (
-                        subject: "Stage Push to Docker Hub Status: ${currentBuild.fullDisplayName}",
-                        body: """<p>Stage 'Push to Docker Hub' finished with status: ${currentBuild.result}</p>
-                                 <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
-                        mimeType: 'text/html',
-                        to: 'pavanchandra2599@gmail.com'
-                    )
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    script {
+                        bat "echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin"
+                        bat "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                        bat "docker push ${DOCKER_IMAGE}:${LATEST_TAG}"
+                    }
                 }
             }
         }
     }
 
     post {
-        always {
-            emailext (
-                subject: "Pipeline Status: ${currentBuild.fullDisplayName}",
-                body: """<p>Pipeline Status: ${currentBuild.result}</p>
-                         <p>Check console output at <a href='${BUILD_URL}'>${BUILD_URL}</a></p>""",
-                mimeType: 'text/html',
-                to: 'pavanchandra2599@gmail.com'
-            )
+        success {
+            emailext subject: 'Build Success',
+                     body: 'Jenkins build completed successfully.',
+                     to: 'pavanchandra2599@gmail.com'
+        }
+        failure {
+            emailext subject: 'Build Failed',
+                     body: 'Jenkins build failed. Please check the logs.',
+                     to: 'pavanchandra2599@gmail.com'
         }
     }
 }
